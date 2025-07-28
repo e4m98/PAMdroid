@@ -1,78 +1,82 @@
 cmake_minimum_required(VERSION 3.18)
 cmake_policy(SET CMP0074 NEW)
 
+set(CMAKE_SYSTEM_PROCESSOR x86_64)
+
 project(App VERSION 1.0.0
-        DESCRIPTION "bluetooth_Linux_auth_bypass"
-        LANGUAGES CXX)
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+        DESCRIPTION "bluetooth_Linux_auth")
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF)
+
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
-# 사용자 설치 경로
 list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
 list(APPEND CMAKE_PREFIX_PATH "/usr/lib/x86_64-linux-gnu/cmake/sdbus-c++")
-set(CPP_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}")
-option(ARMA_64BIT_WORD "Use 64-bit Armadillo indices" ON)
+set(C_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(STATUS "Building for 64-bit architecture")
+else()
+    message(FATAL_ERROR "This project requires 64-bit architecture")
+endif()
 
 if (ARMA_64BIT_WORD)
   add_definitions(-DARMA_64BIT_WORD)
 endif()
 
-
 # ------------------------------------------------------------------
-# 필수 의존성 (Config 모드 우선)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(SDBUS REQUIRED sdbus-c++)
-pkg_check_modules(GLIB2 REQUIRED
-                  IMPORTED_TARGET
-                  glib-2.0)
-# ------------------------------------------------------------------
-# 헤더 온리 라이브러리 include 경로 등록 예시
 
-# HTSlib
-# find_path(HTSLIB_INCLUDE_DIR htslib/hts.h
-#   PATHS "${CPP_INSTALL_PREFIX}/include" NO_DEFAULT_PATH REQUIRED)
-# find_library(HTSLIB_LIBRARY hts
-#   PATHS "${CPP_INSTALL_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED)
-# add_library(HTSlib::hts STATIC IMPORTED GLOBAL)
-# set_target_properties(HTSlib::hts PROPERTIES
-#   IMPORTED_LOCATION "${HTSLIB_LIBRARY}"
-#   INTERFACE_INCLUDE_DIRECTORIES "${HTSLIB_INCLUDE_DIR}"
-# )
+pkg_check_modules(SDBUS REQUIRED IMPORTED_TARGET sdbus-c++)
+pkg_check_modules(GLIB2 REQUIRED IMPORTED_TARGET glib-2.0)
+find_path(PAM_INCLUDE_DIR NAMES security/pam_appl.h)
+find_library(PAM_LIBRARY NAMES pam)
 
 # ------------------------------------------------------------------
-# 프로젝트 타겟
-file(GLOB_RECURSE SOURCES src/*.cpp)
-file(GLOB_RECURSE HEADERS include/*.hpp include/*.h)
+file(GLOB_RECURSE SOURCES src/*.c)
+file(GLOB_RECURSE HEADERS include/*.h)
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${HEADERS})
 
+# ------------------------------------------------------------------
 target_include_directories(${PROJECT_NAME}
   PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${SDBUS_INCLUDE_DIRS}"
+    ${PAM_INCLUDE_DIR}
 )
 
-# 컴파일 옵션
 target_compile_options(${PROJECT_NAME}
   PRIVATE
     -Wall -Wextra -Wconversion
+    -m64
     $<$<CONFIG:Debug>:-g3;-Og;-DDEBUG>
-    $<$<CONFIG:Release>:-O3;-DNDEBUG;-march=native>
+    $<$<CONFIG:Release>:-O3;-DNDEBUG;-march=x86-64>
+)
+
+target_link_options(${PROJECT_NAME}
+  PRIVATE
+    -m64
+)
+
+target_compile_definitions(${PROJECT_NAME}
+  PRIVATE
+    _FILE_OFFSET_BITS=64
+    _LARGEFILE64_SOURCE
 )
 
 # ------------------------------------------------------------------
-# 라이브러리 링크
 target_link_libraries(${PROJECT_NAME}
   PRIVATE
-    ${SDBUS_LIBRARIES}
+    PkgConfig::SDBUS
     PkgConfig::GLIB2
+    ${PAM_LIBRARY}
 )
+
 # ------------------------------------------------------------------
-# 5) 설치 규칙
 include(GNUInstallDirs)
 install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -80,14 +84,20 @@ install(TARGETS ${PROJECT_NAME}
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
+  FILES_MATCHING PATTERN "*.h"
 )
 
 # ------------------------------------------------------------------
-# 빌드 요약
 message(STATUS "=== Build Configuration ===")
 message(STATUS "Project: ${PROJECT_NAME} v${PROJECT_VERSION}")
 message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "CPP Install Prefix: ${CPP_INSTALL_PREFIX}")
+message(STATUS "Language: C")
+message(STATUS "C Standard: ${CMAKE_C_STANDARD}")
+message(STATUS "System Processor: ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "Pointer Size: ${CMAKE_SIZEOF_VOID_P} bytes")
+message(STATUS "C Install Prefix: ${C_INSTALL_PREFIX}")
+message(STATUS "SDBUS Found: ${SDBUS_FOUND}")
+message(STATUS "GLIB2 Found: ${GLIB2_FOUND}")
+message(STATUS "PAM Library: ${PAM_LIBRARY}")
 message(STATUS "Source files: ${SOURCES}")
 message(STATUS "===========================")
