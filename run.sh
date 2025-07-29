@@ -14,8 +14,8 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-echo "Configuration with make generator..."
-if ! cmake -G make .. > "$LOG_FILE" 2>&1; then
+echo "Configuration with Unix Makefiles generator..."
+if ! cmake -G "Unix Makefiles" .. > "$LOG_FILE" 2>&1; then
     echo "CMake configuration failed. Check $LOG_FILE for details."
     exit 1
 fi
@@ -27,7 +27,9 @@ if ! make >> "$LOG_FILE" 2>&1; then
 fi
 echo "-----------Build Complete-----------"
 
-if [[ -f ./$APP_EXEC ]]; then
+if [[ ! -f ./$APP_EXEC ]]; then
     echo "Error: $APP_EXEC executable not found!" | tee -a "$LOG_FILE"
     exit 1
 fi
+
+echo."
